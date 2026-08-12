@@ -130,7 +130,7 @@ public class Hook implements IXposedHookLoadPackage {
                     JSONObject examVO = json.getJSONObject("examVO");
                     JSONArray questions = examVO.getJSONArray("questions");
                     JSONObject last = questions.getJSONObject(questions.length() - 1);
-                    last.put("content", title_str);
+                    last.put("title", title_str);
                     JSONArray answers = last.getJSONArray("answers");
                     answers.put(0, answer_str);
                     last.put("answers", answers);
