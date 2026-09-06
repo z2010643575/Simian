@@ -108,7 +108,7 @@ class HookInit : XposedModule() {
             QuickAnswerHook(env),
             NickHook(env),
             ScoreApiHook(env),
-            WebviewHook(env),
+            WebviewHook(env)
         )
 
     private companion object {

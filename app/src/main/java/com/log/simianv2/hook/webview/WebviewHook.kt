@@ -63,6 +63,9 @@ internal class WebviewHook(private val env: HookEnvironment) : BaseHook {
             val data = String(Base64.decode(root.get("base64").toString().toByteArray(), 0)).let {
                 JSONObject(it)
             }
+
+            if (!data.has("examVO")) return@intercept chain.proceed()
+
             val origCostTime = data.get("costTime")
             val costTime: Long =
                 HostSettingsStore.get(env.context, HostSettingsStore.CUSTOM_END_TIME, 0L) as Long

@@ -7,11 +7,6 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 internal object WebApi {
-
-    private const val MODULE_URL =
-        "https://leo.fbcontent.cn/bh5/leo-web-oral-pk/assets/" +
-                "index-legacy.DMgv2yXx.js"
-
     /**
      * 将坐标写入画板内部数据并触发 endStroke。
      */
@@ -40,56 +35,195 @@ internal object WebApi {
         }
 
         val script = """
-            (() => {
-                const points = $pointsJson;
+    (() => {
+        const points = $pointsJson;
 
-                window.__strokeSubmitStatus = {
-                    status: 'loading-module',
-                    pointCount: points.length
-                };
+        const status =
+            window.__strokeSubmitStatus = {
+                status: 'finding-module',
+                pointCount: points.length
+            };
 
-                System.import('$MODULE_URL')
-                    .then(module => {
-                        const store = module.d?.();
-                        const pad = store?.pad?.value ?? store?.pad;
+        const unref = target => {
+            if (
+                target &&
+                typeof target === 'object' &&
+                'value' in target
+            ) {
+                return target.value;
+            }
 
-                        if (!pad) {
-                            throw new Error('画板尚未初始化');
-                        }
+            return target;
+        };
 
-                        pad._data = [{
-                            points: points,
-                            penColor: '#000',
-                            minWidth: 3,
-                            maxWidth: 3,
-                            velocityFilterWeight: 0.7,
-                            compositeOperation: 'source-over'
-                        }];
+        const findWritingModule = async () => {
+            const resourceUrls = performance
+                .getEntriesByType('resource')
+                .map(item => item.name);
 
-                        window.__strokeSubmitStatus.status =
-                            'dispatching-end-stroke';
+            const scriptUrls = Array.from(
+                document.scripts
+            )
+                .map(item => item.src)
+                .filter(Boolean);
 
-                        pad.dispatchEvent(
-                            new CustomEvent('endStroke', {
-                                detail: {
-                                    synthetic: true
-                                }
-                            })
+            const candidates = Array.from(
+                new Set([
+                    ...resourceUrls,
+                    ...scriptUrls
+                ])
+            ).filter(url =>
+                url.includes(
+                    '/leo-web-oral-pk/assets/'
+                ) &&
+                /index-legacy\.[^/]+\.js/.test(url)
+            );
+
+            status.candidates = candidates;
+
+            for (const moduleUrl of candidates) {
+                try {
+                    const module =
+                        await System.import(moduleUrl);
+
+                    if (
+                        typeof module?.d !== 'function'
+                    ) {
+                        continue;
+                    }
+
+                    /*
+                     * 先检查函数源码，防止误调用公共模块中
+                     * 名字同样为d的closeWebView等函数。
+                     */
+                    const exportSource =
+                        Function.prototype.toString.call(
+                            module.d
                         );
 
-                        window.__strokeSubmitStatus.status = 'submitted';
-                    })
-                    .catch(error => {
-                        window.__strokeSubmitStatus.status = 'failed';
-                        window.__strokeSubmitStatus.error =
-                            String(error);
-                    });
+                    if (
+                        !exportSource.includes(
+                            'recognizeConfig'
+                        ) ||
+                        !exportSource.includes('pad')
+                    ) {
+                        continue;
+                    }
 
-                return JSON.stringify(
-                    window.__strokeSubmitStatus
+                    const store = module.d();
+
+                    const pad =
+                        unref(store?.pad);
+
+                    const recognizeConfig =
+                        unref(
+                            store?.recognizeConfig
+                        );
+
+                    if (
+                        !pad ||
+                        typeof pad.dispatchEvent !==
+                            'function' ||
+                        typeof pad.toData !==
+                            'function'
+                    ) {
+                        continue;
+                    }
+
+                    /*
+                     * 只选择当前题目已经初始化的Store，
+                     * 避免选中旧模块实例。
+                     */
+                    if (!recognizeConfig) {
+                        continue;
+                    }
+
+                    return {
+                        moduleUrl,
+                        store,
+                        pad,
+                        recognizeConfig
+                    };
+                } catch (_) {
+                    // 当前候选不是画板模块，继续检查
+                }
+            }
+
+            throw new Error(
+                '没有找到已初始化的画板模块'
+            );
+        };
+
+        if (
+            typeof System === 'undefined' ||
+            typeof System.import !== 'function'
+        ) {
+            status.status = 'failed';
+            status.error =
+                '当前页面不支持System.import';
+
+            return JSON.stringify(status);
+        }
+
+        findWritingModule()
+            .then(result => {
+                const pad = result.pad;
+                const config =
+                    result.recognizeConfig;
+
+                status.moduleUrl =
+                    result.moduleUrl;
+
+                status.keypointId =
+                    config.keypointId;
+
+                status.expectedResult =
+                    config.answers;
+
+                pad._data = [{
+                    points: points,
+                    penColor: '#000',
+                    minWidth: 3,
+                    maxWidth: 3,
+                    velocityFilterWeight: 0.7,
+                    compositeOperation:
+                        'source-over'
+                }];
+
+                if ('_isEmpty' in pad) {
+                    pad._isEmpty = false;
+                }
+
+                status.status =
+                    'dispatching-end-stroke';
+
+                pad.dispatchEvent(
+                    new CustomEvent(
+                        'endStroke',
+                        {
+                            detail: {
+                                synthetic: true
+                            }
+                        }
+                    )
                 );
-            })();
-        """.trimIndent()
+
+                status.status =
+                    'waiting-recognition';
+            })
+            .catch(error => {
+                status.status = 'failed';
+
+                status.error = String(
+                    error?.stack ||
+                    error?.message ||
+                    error
+                );
+            });
+
+        return JSON.stringify(status);
+    })();
+    """.trimIndent()
 
         evaluate(
             webView = webView,
