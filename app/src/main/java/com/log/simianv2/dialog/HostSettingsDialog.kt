@@ -568,6 +568,10 @@ object HostSettingsDialog {
         val updateDialog = Dialog(activity)
         updateDialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
 
+        val v111Changes = listOf(
+            "修复自动答题"
+        )
+
         val v11Changes =
             listOf(
                 "新增自动化功能",
@@ -612,6 +616,12 @@ object HostSettingsDialog {
         val records =
             LinearLayout(activity).apply {
                 orientation = LinearLayout.VERTICAL
+                addView(versionHeader("v1.1.1", "2026.09.06"))
+                addView(space(activity, 8))
+                addView(changeList(v111Changes))
+                addView(space(activity, 14))
+                addView(divider(activity))
+                addView(space(activity, 14))
                 addView(versionHeader("v1.1", "2026.09.02"))
                 addView(space(activity, 8))
                 addView(changeList(v11Changes))

@@ -15,7 +15,7 @@ class MyApp : Application(), XposedServiceHelper.OnServiceListener {
 
         private val serviceStateListeners = CopyOnWriteArraySet<ServiceStateListener>()
 
-        val appVersion: String = "1.1.0"
+        val appVersion: String = "1.1.1"
 
         private fun dispatchServiceState(listener: ServiceStateListener, service: XposedService?) {
             if (serviceStateListeners.contains(listener)) {
